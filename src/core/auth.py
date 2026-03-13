@@ -29,17 +29,30 @@ def verify_login(username: str, password: str) -> bool:
     return username == config.ADMIN_USERNAME and password == config.ADMIN_PASSWORD
 
 
+def _verify_jwt_token(token: str) -> bool:
+    try:
+        payload = jwt.decode(token, _JWT_SECRET, algorithms=["HS256"])
+        return payload.get("exp", 0) > time.time()
+    except (jwt.InvalidTokenError, jwt.ExpiredSignatureError):
+        return False
+
+
+async def verify_admin_token(
+    credentials: HTTPAuthorizationCredentials = Security(_security),
+) -> str:
+    token = credentials.credentials
+    if _verify_jwt_token(token):
+        return token
+    raise HTTPException(status_code=401, detail="Invalid admin token")
+
+
 async def verify_api_key(
     credentials: HTTPAuthorizationCredentials = Security(_security),
 ) -> str:
     token = credentials.credentials
-    # Try JWT first
-    try:
-        payload = jwt.decode(token, _JWT_SECRET, algorithms=["HS256"])
-        if payload.get("exp", 0) > time.time():
-            return token
-    except (jwt.InvalidTokenError, jwt.ExpiredSignatureError):
-        pass
+    # Allow admin JWTs so the built-in admin chat tester can call /v1 endpoints.
+    if _verify_jwt_token(token):
+        return token
     # Fallback to API key
     if _key_manager and _key_manager.validate(token):
         return token

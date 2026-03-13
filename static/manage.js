@@ -25,6 +25,68 @@ function showToast(msg, type = 'info') {
     setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; setTimeout(() => el.remove(), 300); }, 2000);
 }
 
+function _isSafeUrl(url) {
+    if (!url) return false;
+    try {
+        const parsed = new URL(url, window.location.origin);
+        return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    } catch {
+        return false;
+    }
+}
+
+function sanitizeHtml(html) {
+    const template = document.createElement('template');
+    template.innerHTML = html;
+    const allowedTags = new Set([
+        'A', 'B', 'BLOCKQUOTE', 'BR', 'CODE', 'DEL', 'EM', 'H1', 'H2', 'H3',
+        'H4', 'H5', 'H6', 'HR', 'I', 'LI', 'OL', 'P', 'PRE', 'SPAN', 'STRONG',
+        'TABLE', 'TBODY', 'TD', 'TH', 'THEAD', 'TR', 'UL'
+    ]);
+    const urlAttrs = new Set(['href']);
+
+    const cleanNode = node => {
+        for (const child of [...node.childNodes]) {
+            if (child.nodeType === Node.ELEMENT_NODE) {
+                if (!allowedTags.has(child.tagName)) {
+                    const fragment = document.createDocumentFragment();
+                    while (child.firstChild) {
+                        fragment.appendChild(child.firstChild);
+                    }
+                    child.replaceWith(fragment);
+                    cleanNode(node);
+                    continue;
+                }
+                for (const attr of [...child.attributes]) {
+                    const name = attr.name.toLowerCase();
+                    const value = attr.value.trim();
+                    if (name.startsWith('on') || name === 'style') {
+                        child.removeAttribute(attr.name);
+                        continue;
+                    }
+                    if (urlAttrs.has(name) && !_isSafeUrl(value)) {
+                        child.removeAttribute(attr.name);
+                        continue;
+                    }
+                    if (!urlAttrs.has(name) && name !== 'class') {
+                        child.removeAttribute(attr.name);
+                    }
+                }
+                if (child.tagName === 'A') {
+                    child.setAttribute('rel', 'noopener noreferrer');
+                    child.setAttribute('target', '_blank');
+                }
+                cleanNode(child);
+            } else if (child.nodeType === Node.COMMENT_NODE) {
+                child.remove();
+            }
+        }
+    };
+
+    cleanNode(template.content);
+    return template.innerHTML;
+}
+
 /* ===== Tabs ===== */
 function switchTab(tab) {
     ['accounts', 'settings', 'chat'].forEach(t => {
@@ -473,9 +535,13 @@ function renderChat() {
     const box = document.getElementById('chatMessages');
     box.innerHTML = _chatMessages.map(m => {
         const isUser = m.role === 'user';
-        let rendered = typeof marked !== 'undefined' ? marked.parse(m.content || '') : (m.content || '');
+        const raw = typeof marked !== 'undefined' ? marked.parse(m.content || '') : (m.content || '');
+        let rendered = sanitizeHtml(raw);
         if (m.images && m.images.length) {
-            rendered += m.images.map(url => `<img src="${url}" class="mt-2 max-w-full rounded-lg cursor-pointer" style="max-height:400px" onclick="window.open(this.src,'_blank')" alt="生成图片">`).join('');
+            rendered += m.images
+                .filter(_isSafeUrl)
+                .map(url => `<img src="${url}" class="mt-2 max-w-full rounded-lg cursor-pointer" style="max-height:400px" onclick="window.open(this.src,'_blank')" alt="生成图片">`)
+                .join('');
         }
         return `<div class="flex ${isUser ? 'justify-end' : 'justify-start'} mb-3">
             <div class="chat-msg max-w-[80%] rounded-lg px-4 py-2 text-sm ${isUser ? 'bg-primary text-primary-foreground' : 'bg-secondary'}">

@@ -45,6 +45,8 @@ docker run -d \
   ob12api
 ```
 
+如果你修改了 `config/setting.toml` 里的 `[server].port`，需要把 `-p` 的宿主机端口和容器端口一起改成相同值。
+
 ### Docker Compose
 
 ```yaml
@@ -53,12 +55,14 @@ services:
   ob12api:
     build: .
     ports:
-      - "8081:8081"
+      - "${OB12API_PORT:-8081}:${OB12API_PORT:-8081}"
     volumes:
       - ./config:/app/config
       - ./data:/app/data
     restart: unless-stopped
 ```
+
+`docker-compose.yml` 默认映射 `8081`。如果你把 `config/setting.toml` 中的 `[server].port` 改成了别的值，请同时设置环境变量 `OB12API_PORT` 为相同端口。
 
 服务启动后访问 `http://localhost:8081` 进入管理面板。
 

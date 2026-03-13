@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from ..core.auth import verify_api_key, verify_login, create_login_token
+from ..core.auth import verify_admin_token, verify_login, create_login_token
 from ..core import config
 from ..core.config import update_setting
 from ..core.logger import get_logger, set_level
@@ -46,7 +46,7 @@ async def login(req: LoginRequest):
 
 
 # ===== Protected routes =====
-_auth = [Depends(verify_api_key)]
+_auth = [Depends(verify_admin_token)]
 
 
 @router.get("/status", dependencies=_auth)

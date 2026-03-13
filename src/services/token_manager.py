@@ -83,12 +83,19 @@ class OB1TokenManager:
         self._request_count: int = 0
         self._cost_today: float = 0
 
+    def _normalize_current_idx(self):
+        if not self._accounts:
+            self._current_idx = 0
+            return
+        self._current_idx %= len(self._accounts)
+
     def load(self):
         # Load from accounts.json
         if os.path.exists(self._path):
             with open(self._path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             self._accounts = [Account(a) for a in data]
+            self._normalize_current_idx()
             log.info("Loaded %d accounts", len(self._accounts))
         # Also import from ~/.ob1/credentials.json if accounts.json is empty
         if not self._accounts:
@@ -199,6 +206,7 @@ class OB1TokenManager:
         if idx < 0 or idx >= len(self._accounts):
             return False
         removed = self._accounts.pop(idx)
+        self._normalize_current_idx()
         self._save()
         log.info("Removed %s", removed.email)
         return True
@@ -260,6 +268,7 @@ class OB1TokenManager:
         """Get a valid API key based on rotation mode."""
         if not self._accounts:
             return None
+        self._normalize_current_idx()
         n = len(self._accounts)
         mode = _config.OB1_ROTATION_MODE
 
@@ -300,6 +309,7 @@ class OB1TokenManager:
                 existing.add(d["email"])
                 count += 1
         if count:
+            self._normalize_current_idx()
             self._save()
         return count
 
@@ -311,5 +321,6 @@ class OB1TokenManager:
                 self._accounts.pop(i)
                 removed += 1
         if removed:
+            self._normalize_current_idx()
             self._save()
         return removed

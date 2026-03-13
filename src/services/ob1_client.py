@@ -35,7 +35,14 @@ class OB1Client:
 
     def __init__(self):
         self.base_url = OB1_API_BASE
-        self._models_cache: list | None = None
+        self._models_cache: dict[str, list] = {}
+
+    def _models_cache_key(self, api_key: str) -> str:
+        if ":" in api_key:
+            _, org_id = api_key.rsplit(":", 1)
+            if org_id:
+                return f"org:{org_id}"
+        return f"token:{api_key[-16:]}"
 
     def _proxy(self) -> str | None:
         url = _config.PROXY_URL
@@ -43,8 +50,9 @@ class OB1Client:
 
     async def fetch_models(self, api_key: str) -> list:
         """Fetch available models from OB-1. Cached after first call."""
-        if self._models_cache is not None:
-            return self._models_cache
+        cache_key = self._models_cache_key(api_key)
+        if cache_key in self._models_cache:
+            return self._models_cache[cache_key]
         try:
             log.debug("Fetching models from %s/models", self.base_url)
             async with httpx.AsyncClient(timeout=15, proxy=self._proxy()) as client:
@@ -53,9 +61,10 @@ class OB1Client:
                     headers={**_HEADERS, "Authorization": f"Bearer {api_key}"},
                 )
             if resp.status_code == 200:
-                self._models_cache = resp.json().get("data", [])
-                log.info("Fetched %d models", len(self._models_cache))
-                return self._models_cache
+                models = resp.json().get("data", [])
+                self._models_cache[cache_key] = models
+                log.info("Fetched %d models for %s", len(models), cache_key)
+                return models
             log.warning("Models fetch returned %d", resp.status_code)
         except Exception as e:
             log.error("Models fetch failed: %s", e)
